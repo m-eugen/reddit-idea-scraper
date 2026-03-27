@@ -1,342 +1,234 @@
 # Reddit Idea Scraper
 
-Автоматичний скрипт для пошуку ідей застосунків на Reddit. Скрапить пости, знаходить проблеми/болі користувачів, оцінює їх потенціал через AI та генерує детальні MVP-специфікації.
+Automated script for finding app ideas on Reddit. Scrapes posts, finds user problems, evaluates potential with AI, and generates MVP specifications.
 
-## Можливості
-
-- 🔍 Скрапінг постів з Reddit без потреби в API ключах
-- 🎯 **Інтелектуальна система ключових слів** - автоматично знаходить пости де люди готові платити
-- 💰 Пріоритезація за 4 категоріями: готовність платити, фрустрація, запити, перехід
-- 🤖 AI-аналіз постів для виявлення реальних проблем (Claude Haiku 4.5)
-- 📊 Оцінка потенціалу кожної ідеї з урахуванням ключових слів
-- 📝 Автоматична генерація детальних MVP-специфікацій (Claude Sonnet 4.6)
-- 💾 Збереження результатів у зручному форматі
-- 💸 Оптимізація витрат: двомодельна стратегія (~$0.29 за запуск)
-
-## Як працює
-
-1. **Скрапінг**: Збирає пости з вказаних subreddit'ів через публічні JSON endpoints Reddit
-
-2. **Аналіз ключових слів** 🎯:
-   - 💰 **Money** (вага 10): "I'd pay for", "take my money" - готовність платити
-   - 😤 **Frustration** (вага 7): "drives me crazy", "hate that" - сильна фрустрація
-   - 💡 **Request** (вага 6): "someone should build", "is there a tool" - запит на рішення
-   - 🔄 **Switching** (вага 5): "alternative to", "stopped using" - перехід від існуючого
-
-3. **Фільтрація**: Відбирає пости з достатньою кількістю тексту та оцінкою, сортує за ключовими словами
-
-4. **AI Аналіз**: Claude аналізує кожен пост з урахуванням знайдених ключових слів і визначає:
-   - Чи описує пост реальну проблему
-   - Наскільки чітко сформульована проблема (problemScore)
-   - Потенціал для створення застосунку (potentialScore)
-   - **Бонус** якщо знайдені money keywords!
-
-5. **Генерація MVP**: Для топ-5 ідей створює детальні специфікації з:
-   - Описом проблеми та рішення
-   - Цільовою аудиторією
-   - Ключовими функціями
-   - Технічним стеком
-   - Бізнес-моделлю
-
-📚 **Детальніше про ключові слова**: Див. [KEYWORDS.md](KEYWORDS.md)
-📚 **Обробка помилок**: Див. [ERROR_HANDLING.md](ERROR_HANDLING.md)
-📚 **Коли запускати скрипт**: Див. [SCHEDULING.md](SCHEDULING.md)
-
-## Встановлення
-
-### Вимоги
-
-- Node.js 18+ та npm
-
-### Крок 1: Встановлення залежностей
+## Quick Start
 
 ```bash
+# 1. Install
 npm install
-```
 
-### Крок 2: Налаштування
-
-Скопіюйте `.env.example` в `.env`:
-
-```bash
+# 2. Setup .env
 cp .env.example .env
-```
+# Add API key: ANTHROPIC_API_KEY=sk-ant-...
 
-Відредагуйте `.env` файл:
+# 3. Buy credits ($5)
+# https://console.anthropic.com/ → Plans & Billing → Buy credits
 
-```env
-# Anthropic API key (обов'язково!)
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-
-# Налаштування скрапінгу (опціонально)
-SUBREDDITS=SaaS,Entrepreneur,startups,smallbusiness,productivity
-MAX_POSTS_PER_SUBREDDIT=50
-MIN_SCORE_THRESHOLD=10
-```
-
-#### Де взяти Anthropic API key?
-
-1. Зареєструйтесь на [console.anthropic.com](https://console.anthropic.com/)
-2. Перейдіть в розділ "API Keys"
-3. Створіть новий ключ
-4. Скопіюйте його в `.env` файл
-
-#### ⚠️ ВАЖЛИВО: Придбайте кредити для API
-
-Навіть якщо у вас є баланс в Anthropic Console, для використання API потрібно окремо придбати кредити:
-
-1. Відкрийте [console.anthropic.com](https://console.anthropic.com/)
-2. Перейдіть в розділ **"Plans & Billing"**
-3. Натисніть **"Buy credits"**
-4. Придбайте мінімум **$5** кредитів
-
-Без цього крoku ви отримаєте помилку: `"Your credit balance is too low to access the Anthropic API"`
-
-**Приблизна вартість використання:**
-- Аналіз 1 поста (Claude Haiku 4.5): ~$0.0007
-- Генерація 1 MVP-специфікації (Claude Sonnet 4.6): ~$0.05
-- Повний запуск (50 постів + 5 MVP): ~$0.29
-
-**Оптимізація моделей:**
-- Масовий аналіз постів: Claude Haiku 4.5 (швидкий і дешевий)
-- Генерація MVP-специфікацій: Claude Sonnet 4.6 (детальний і якісний)
-
-📚 **Детальніше**: Див. [OPTIMIZATION.md](OPTIMIZATION.md) для стратегій економії
-
-> **Важливо**: Для Reddit API ключі НЕ потрібні - використовуються публічні endpoints.
-
-### Налаштування ключових слів
-
-Додайте в `.env` свої ключові слова (опціонально):
-
-```env
-# 🔥 Готовність платити (найвищий пріоритет)
-MONEY_KEYWORDS=I'd pay for,take my money,worth paying for
-
-# 💡 Запит на рішення
-REQUEST_KEYWORDS=someone should build,is there a tool,looking for
-
-# 😤 Фрустрація
-FRUSTRATION_KEYWORDS=frustrated with,drives me crazy,waste of time
-
-# 🔄 Перехід від існуючого
-SWITCHING_KEYWORDS=alternative to,stopped using,better than
-```
-
-📚 **Повний гайд з прикладами**: [KEYWORDS.md](KEYWORDS.md)
-
-## Використання
-
-### Базове використання
-
-```bash
-npm run scrape
-```
-
-або для development режиму:
-
-```bash
+# 4. Run
 npm run dev
 ```
 
-### Збірка проєкту
+## Features
 
-```bash
-npm run build
-npm start
+- 🔍 Reddit scraping (no API keys needed)
+- 🎯 **Keyword system** - finds posts where people are ready to pay
+- 🤖 AI analysis via Claude (Haiku + Sonnet)
+- 📝 MVP spec generation for top-5 ideas
+- 💰 ~$0.29 per run (50 posts + 5 MVPs)
+
+## Keywords
+
+The script searches for 4 types of signals:
+
+| Category | Weight | Examples |
+|----------|--------|----------|
+| 💰 Money | 10 | "I'd pay for", "take my money", "worth paying for" |
+| 😤 Frustration | 7 | "drives me crazy", "hate that", "waste of time" |
+| 💡 Request | 6 | "someone should build", "is there a tool" |
+| 🔄 Switching | 5 | "alternative to", "stopped using" |
+
+**Customization** - add your own in `.env`:
+```env
+MONEY_KEYWORDS=I'd pay for,take my money
+FRUSTRATION_KEYWORDS=frustrated with,drives me crazy
+REQUEST_KEYWORDS=someone should build,is there a tool
+SWITCHING_KEYWORDS=alternative to,stopped using
 ```
 
-## Конфігурація
-
-### Параметри в .env
-
-- `ANTHROPIC_API_KEY` - API ключ від Anthropic (обов'язково)
-- `SUBREDDITS` - список subreddit'ів через кому
-- `MAX_POSTS_PER_SUBREDDIT` - максимум постів з кожного subreddit
-- `MIN_SCORE_THRESHOLD` - мінімальна кількість upvotes для поста
-
-### Рекомендовані subreddit'и для пошуку ідей
-
-- `SaaS` - SaaS-продукти та ідеї
-- `Entrepreneur` - підприємництво
-- `startups` - стартапи
-- `smallbusiness` - малий бізнес
-- `productivity` - продуктивність
-- `indiehackers` - інді-мейкери
-- `SideProject` - сайд-проєкти
-- `IMadeThis` - готові проєкти
-- `wantrepreneurs` - починаючі підприємці
-
-## Структура вихідних файлів
-
-Усі результати зберігаються в папці `output/`:
-
-```
-output/
-├── ideas.json                      # Всі знайдені ідеї з оцінками
-├── mvp-specs-summary-YYYY-MM-DD.md # Підсумок з посиланнями
-├── mvp-spec-YYYY-MM-DD-1.md        # Детальна специфікація №1
-├── mvp-spec-YYYY-MM-DD-2.md        # Детальна специфікація №2
-└── ...
-```
-
-### Приклад ideas.json
-
-```json
-[
-  {
-    "post": {
-      "id": "abc123",
-      "title": "I spend hours manually...",
-      "subreddit": "productivity",
-      ...
-    },
-    "problemScore": 8,
-    "potentialScore": 7,
-    "totalScore": 7.5,
-    "problemDescription": "Люди витрачають багато часу на ручне...",
-    "reasoning": "Чітко описана проблема з автоматизацією..."
-  }
-]
-```
-
-## Відновлення після помилок
-
-Якщо скрипт зупинився через помилку (наприклад, недостатньо коштів), не хвилюйтесь!
-
-### Автоматичне збереження прогресу
-
-Скрипт автоматично зберігає прогрес кожні 10 проаналізованих постів у файл `output/progress.json`.
-
-### Як продовжити після помилки
-
-1. Вирішіть проблему (наприклад, поповніть баланс API)
-2. Просто запустіть скрипт знову:
-   ```bash
-   npm run dev
-   ```
-3. Скрипт автоматично:
-   - Завантажить збережений прогрес
-   - Покаже скільки постів вже проаналізовано
-   - Продовжить з місця зупинки
-
-### Приклад виводу при відновленні
-
-```
-📂 Знайдено збережений прогрес:
-   Вже проаналізовано: 8 постів
-   Знайдено ідей: 3
-   Залишилось: 58 постів
-```
-
-## Приклади використання
-
-### Пошук ідей в конкретних нішах
+## .env Configuration
 
 ```env
-SUBREDDITS=fitness,nutrition,loseit
-```
+# API key (required!)
+ANTHROPIC_API_KEY=sk-ant-api03-your_key
 
-### Більш агресивний пошук
+# Subreddits
+SUBREDDITS=SaaS,Entrepreneur,startups,indiehackers
 
-```env
-MAX_POSTS_PER_SUBREDDIT=100
-MIN_SCORE_THRESHOLD=5
-```
+# Settings
+MAX_POSTS_PER_SUBREDDIT=50
+MIN_SCORE_THRESHOLD=10
 
-### Пошук тільки популярних проблем
-
-```env
-MIN_SCORE_THRESHOLD=50
-```
-
-## Обмеження
-
-- Rate limiting: Скрипт робить паузи між запитами (2 сек для Reddit, 1 сек для AI)
-- Reddit може блокувати занадто часті запити - використовуйте розумні інтервали
-- Anthropic API має ліміти токенів - перевірте ваш план
-- Скрипт аналізує тільки публічні пости (не приватні subreddit'и)
-
-## Поради по використанню
-
-1. **Починайте з малого**: Спочатку спробуйте 1-2 subreddit'и
-2. **Перевіряйте витрати**: AI аналіз коштує токенів - слідкуйте за витратами в Anthropic Console
-3. **Експериментуйте з параметрами**: Різні subreddit'и можуть давати різні результати
-4. **Аналізуйте тренди**: Запускайте регулярно для виявлення нових проблем
-5. **Комбінуйте джерела**: Використовуйте різні набори subreddit'ів для різних ніш
-
-## Вирішення проблем (Troubleshooting)
-
-### ❌ "Overloaded" (529)
-
-**Проблема**: API Anthropic перевантажений
-
-**Рішення**: ✅ **Автоматично обробляється!**
-- Скрипт сам чекає і повторює запит (до 3-5 разів)
-- Експоненційний backoff: 2с → 4с → 8с
-- Прогрес зберігається автоматично
-
-### ❌ "Your credit balance is too low"
-
-**Проблема**: Помилка при спробі використати Anthropic API
-
-**Рішення**:
-1. Відкрийте [console.anthropic.com](https://console.anthropic.com/)
-2. Перейдіть в "Plans & Billing"
-3. Натисніть "Buy credits" та придбайте кредити (мінімум $5)
-4. Запустіть скрипт знову - він продовжить з місця зупинки
-
-### ❌ "model: ... not found" (404)
-
-**Проблема**: Модель не доступна у вашому акаунті
-
-**Рішення**: Налаштуйте доступні моделі через `.env`
-
-Додайте в `.env` файл:
-```env
+# Models (if you need to change)
 MODEL_ANALYSIS=claude-3-haiku-20240307
 MODEL_MVP=claude-3-sonnet-20240229
 ```
 
-📚 **Детальніше**: Див. [MODEL_SETUP.md](MODEL_SETUP.md) для повного списку моделей
+### Where to get API key?
 
-### ❌ "No posts found matching criteria"
+1. Register: https://console.anthropic.com/
+2. API Keys → Create Key
+3. **Plans & Billing → Buy credits** ($5 minimum)
+4. Add key to `.env`
 
-**Проблема**: Скрипт не знайшов жодного поста
+⚠️ **Important**: You need to buy API credits separately, not just balance!
 
-**Рішення**:
-- Зменшіть `MIN_SCORE_THRESHOLD` в `.env`
-- Спробуйте інші subreddit'и
-- Збільште `MAX_POSTS_PER_SUBREDDIT`
+## Usage
 
-### ❌ Reddit блокує запити (429 Too Many Requests)
+```bash
+# Run
+npm run dev
 
-**Проблема**: Занадто багато запитів до Reddit
+# Or build
+npm run build
+npm start
+```
 
-**Рішення**:
-- Зачекайте 5-10 хвилин
-- Зменшіть `MAX_POSTS_PER_SUBREDDIT`
-- Зменшіть кількість subreddit'ів
+## Results
 
-### ❌ "ANTHROPIC_API_KEY is required"
+All results in `output/` folder:
 
-**Проблема**: API ключ не знайдено
+```
+output/
+├── ideas.json              # All ideas with scores
+├── mvp-specs-summary-*.md  # Summary
+├── mvp-spec-*-1.md         # MVP #1
+├── mvp-spec-*-2.md         # MVP #2
+└── ...
+```
 
-**Рішення**:
-1. Переконайтеся що файл `.env` існує
-2. Перевірте що в `.env` є рядок `ANTHROPIC_API_KEY=sk-...`
-3. Перезапустіть термінал після створення `.env`
+### Useful Commands
 
-## Технології
+```bash
+# Show found ideas
+cat output/ideas.json | jq '.[].problemDescription'
 
-- **Node.js** + **TypeScript** - основа проєкту
-- **Anthropic Claude API** - AI аналіз та генерація специфікацій
-- **Reddit JSON API** - публічні endpoints без авторизації
+# Money ideas only
+cat output/ideas.json | jq '.[] | select(.keywordMatches[]?.category == "money")'
 
-## Ліцензія
+# Top 5
+cat output/ideas.json | jq 'sort_by(.totalScore) | reverse | .[0:5]'
+
+# Clear progress
+rm output/progress.json
+```
+
+## When to Run?
+
+**Recommended**: once per week (Wednesday morning)
+
+**Why**:
+- Enough fresh content
+- Avoid duplicates
+- Cost-effective (~$1.20/month)
+
+**Automation** (cron):
+```bash
+crontab -e
+# Add:
+0 8 * * 3 cd /path/to/reddit-scraper && npm run dev
+```
+
+## Errors & Solutions
+
+| Error | What to Do |
+|-------|------------|
+| **529 Overloaded** | ✅ Auto-retry (2s, 4s, 8s) - do nothing |
+| **500 Server Error** | ⚠️ Script skips and continues. Try later |
+| **401 Auth** | New API key: https://console.anthropic.com/settings/keys |
+| **400 No Credits** | Buy credits: https://console.anthropic.com/ |
+| **404 Model** | Change model in `.env` to `claude-3-haiku-20240307` |
+
+### 529 Overloaded (API overload)
+
+Script **automatically** retries with delays. You'll see:
+```
+⏳ API перевантажений. Чекаємо 2с перед спробою 2/3...
+```
+
+If all attempts fail - wait 5-10 min and run again.
+
+### 400 No Credits (insufficient funds)
+
+```bash
+# 1. Open console.anthropic.com
+# 2. Plans & Billing → Buy credits
+# 3. Buy $5
+# 4. Run again - continues from where it stopped
+```
+
+### 500 Server Error
+
+Temporary issue on Anthropic servers. Script skips the problematic MVP and continues with others. Wait 10-30 min and try again.
+
+## Recovery After Errors
+
+Script **automatically saves progress** every 10 posts. If stopped:
+
+1. Fix the issue (add credits, change key)
+2. Run again: `npm run dev`
+3. It will continue from where it stopped!
+
+```
+📂 Found saved progress:
+   Already analyzed: 8 posts
+   Ideas found: 3
+   Remaining: 58 posts
+```
+
+## Cost Optimization
+
+**Current cost** (~$0.29 per run):
+- 1 post analysis (Haiku): ~$0.0007
+- 1 MVP spec (Sonnet): ~$0.05
+- 50 posts + 5 MVPs = ~$0.29
+
+**How to save**:
+
+```env
+# Fewer posts
+MAX_POSTS_PER_SUBREDDIT=25  # Instead of 50
+
+# Only popular
+MIN_SCORE_THRESHOLD=20       # Instead of 10
+
+# Haiku for everything (cheaper but simpler)
+MODEL_MVP=claude-3-haiku-20240307
+```
+
+**For $5**: ~17 full runs
+
+## Usage Examples
+
+### Find B2B SaaS ideas
+
+```env
+SUBREDDITS=SaaS,Entrepreneur,smallbusiness
+MONEY_KEYWORDS=budget approved,roi,worth the investment
+```
+
+### Developer tools
+
+```env
+SUBREDDITS=webdev,programming,devops
+FRUSTRATION_KEYWORDS=bad dx,slow build,terrible api
+```
+
+### Only with willingness to pay
+
+Change in `src/index.ts` → `filterAndScorePosts()`:
+```typescript
+const topPosts = filteredPosts.filter(p =>
+  p.keywordScore && p.keywordScore >= 10
+);
+```
+
+## Technologies
+
+- Node.js + TypeScript
+- Anthropic Claude API (Haiku 3 + Sonnet 3)
+- Reddit JSON API (public endpoints)
+
+## License
 
 MIT
-
-## Автор
-
-Створено для автоматичного пошуку ідей для застосунків на основі реальних проблем користувачів.
