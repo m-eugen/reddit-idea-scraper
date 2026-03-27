@@ -1,0 +1,18 @@
+# Environment variables
+.env
+
+# Node
+node_modules/
+dist/
+*.log
+
+# Output files
+output/
+*.json
+*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
