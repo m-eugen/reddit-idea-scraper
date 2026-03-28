@@ -8,8 +8,8 @@ dist/
 
 # Output files
 output/
-*.json
-*.csv
+output/*.json
+output/*.csv
 
 # IDE
 .vscode/

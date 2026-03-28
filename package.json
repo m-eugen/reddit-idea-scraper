@@ -1,0 +1,25 @@
+{
+  "name": "reddit-idea-scraper",
+  "version": "1.0.0",
+  "description": "Reddit scraper for finding app ideas and generating MVP specs with AI",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "scrape": "tsx src/index.ts"
+  },
+  "keywords": ["reddit", "scraper", "ai", "mvp", "ideas"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
