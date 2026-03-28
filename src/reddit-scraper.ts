@@ -1,75 +1,108 @@
-import { RedditPost, KeywordMatch, PostWithKeywords, KeywordCategories } from './types.js';
+/**
+ * Reddit scraping and keyword analysis
+ */
 
-const REDDIT_API_BASE = 'https://www.reddit.com';
-const USER_AGENT = 'Mozilla/5.0 (compatible; RedditIdeaScraper/1.0)';
+import {
+  RedditPost,
+  KeywordMatch,
+  PostWithKeywords,
+  KeywordCategories,
+} from './types.js';
+import {
+  REDDIT_API_BASE,
+  USER_AGENT,
+  REDDIT_REQUEST_DELAY_MS,
+  KEYWORD_WEIGHTS,
+  MAX_KEYWORD_SCORE,
+  DEFAULT_CONFIG,
+} from './constants.js';
+import { createLogger } from './logger.js';
+import { sleep } from './retry.js';
 
-async function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+const logger = createLogger('RedditScraper');
 
+/**
+ * Scrape posts from a single subreddit
+ */
 export async function scrapeSubreddit(
   subreddit: string,
-  limit: number = 50
+  limit: number = DEFAULT_CONFIG.maxPostsPerSubreddit
 ): Promise<RedditPost[]> {
   try {
-    console.log(`Scraping r/${subreddit}...`);
+    logger.info(`Scraping r/${subreddit}...`);
 
     const url = `${REDDIT_API_BASE}/r/${subreddit}/hot.json?limit=${limit}`;
     const response = await fetch(url, {
-      headers: {
-        'User-Agent': USER_AGENT
-      }
+      headers: { 'User-Agent': USER_AGENT },
     });
 
     if (!response.ok) {
-      console.error(`Failed to fetch r/${subreddit}: ${response.status}`);
+      logger.error(`Failed to fetch r/${subreddit}: ${response.status}`);
       return [];
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as {
+      data: {
+        children: Array<{ kind: string; data: Record<string, any> }>;
+      };
+    };
     const posts: RedditPost[] = data.data.children
-      .filter((child: any) => child.kind === 't3')
-      .map((child: any) => {
-        const post = child.data;
-        return {
-          id: post.id,
-          title: post.title,
-          selftext: post.selftext || '',
-          author: post.author,
-          subreddit: post.subreddit,
-          score: post.score,
-          num_comments: post.num_comments,
-          created_utc: post.created_utc,
-          url: post.url,
-          permalink: `${REDDIT_API_BASE}${post.permalink}`
-        };
-      });
+      .filter((child) => child.kind === 't3')
+      .map((child) => mapRedditPost(child.data));
 
-    console.log(`Found ${posts.length} posts in r/${subreddit}`);
+    logger.success(`Found ${posts.length} posts in r/${subreddit}`);
     return posts;
   } catch (error) {
-    console.error(`Error scraping r/${subreddit}:`, error);
+    logger.error(`Error scraping r/${subreddit}:`, error);
     return [];
   }
 }
 
+/**
+ * Map Reddit API response to RedditPost
+ */
+function mapRedditPost(data: Record<string, any>): RedditPost {
+  return {
+    id: data.id,
+    title: data.title,
+    selftext: data.selftext || '',
+    author: data.author,
+    subreddit: data.subreddit,
+    score: data.score,
+    num_comments: data.num_comments,
+    created_utc: data.created_utc,
+    url: data.url,
+    permalink: `${REDDIT_API_BASE}${data.permalink}`,
+  };
+}
+
+/**
+ * Scrape posts from multiple subreddits with rate limiting
+ */
 export async function scrapeMultipleSubreddits(
   subreddits: string[],
-  limit: number = 50
+  limit: number = DEFAULT_CONFIG.maxPostsPerSubreddit
 ): Promise<RedditPost[]> {
   const allPosts: RedditPost[] = [];
 
-  for (const subreddit of subreddits) {
+  for (let i = 0; i < subreddits.length; i++) {
+    const subreddit = subreddits[i];
     const posts = await scrapeSubreddit(subreddit, limit);
     allPosts.push(...posts);
 
-    await delay(2000);
+    // Rate limiting between requests
+    if (i < subreddits.length - 1) {
+      await sleep(REDDIT_REQUEST_DELAY_MS);
+    }
   }
 
-  console.log(`\nTotal posts scraped: ${allPosts.length}`);
+  logger.info(`\nTotal posts scraped: ${allPosts.length}`);
   return allPosts;
 }
 
+/**
+ * Find keyword matches in text
+ */
 export function findKeywordMatches(
   text: string,
   keywords: KeywordCategories
@@ -77,11 +110,16 @@ export function findKeywordMatches(
   const textLower = text.toLowerCase();
   const matches: KeywordMatch[] = [];
 
-  const categories: Array<keyof KeywordCategories> = ['money', 'request', 'frustration', 'switching'];
+  const categories: Array<keyof KeywordCategories> = [
+    'money',
+    'request',
+    'frustration',
+    'switching',
+  ];
 
   for (const category of categories) {
     for (const keyword of keywords[category]) {
-      const regex = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+      const regex = createKeywordRegex(keyword);
       const count = (textLower.match(regex) || []).length;
 
       if (count > 0) {
@@ -93,22 +131,30 @@ export function findKeywordMatches(
   return matches;
 }
 
-export function calculateKeywordScore(matches: KeywordMatch[]): number {
-  const weights = {
-    money: 10,        // Найвищий пріоритет - готовість платити
-    frustration: 7,   // Сильна проблема
-    request: 6,       // Активний запит на рішення
-    switching: 5      // Незадоволеність існуючим
-  };
-
-  let score = 0;
-  for (const match of matches) {
-    score += weights[match.category] * match.count;
-  }
-
-  return Math.min(score, 100); // Max 100
+/**
+ * Create regex for keyword matching (escape special chars)
+ */
+function createKeywordRegex(keyword: string): RegExp {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(escaped, 'gi');
 }
 
+/**
+ * Calculate keyword score based on matches and weights
+ */
+export function calculateKeywordScore(matches: KeywordMatch[]): number {
+  let score = 0;
+
+  for (const match of matches) {
+    score += KEYWORD_WEIGHTS[match.category] * match.count;
+  }
+
+  return Math.min(score, MAX_KEYWORD_SCORE);
+}
+
+/**
+ * Analyze post for keywords
+ */
 export function analyzePostKeywords(
   post: RedditPost,
   keywords: KeywordCategories
@@ -120,41 +166,64 @@ export function analyzePostKeywords(
   return {
     ...post,
     keywordMatches,
-    keywordScore
+    keywordScore,
   };
 }
 
+/**
+ * Filter and score posts with keyword analysis
+ */
 export function filterAndScorePosts(
   posts: RedditPost[],
   keywords: KeywordCategories,
-  minScore: number = 10,
-  minTextLength: number = 100,
-  minKeywordScore: number = 0
+  options: {
+    minScore?: number;
+    minTextLength?: number;
+    minKeywordScore?: number;
+  } = {}
 ): PostWithKeywords[] {
-  const postsWithKeywords = posts.map(post => analyzePostKeywords(post, keywords));
+  const {
+    minScore = DEFAULT_CONFIG.minScoreThreshold,
+    minTextLength = DEFAULT_CONFIG.minTextLength,
+    minKeywordScore = DEFAULT_CONFIG.minKeywordScore,
+  } = options;
+
+  const postsWithKeywords = posts.map((post) =>
+    analyzePostKeywords(post, keywords)
+  );
 
   return postsWithKeywords
-    .filter(post => {
-      const hasEnoughScore = post.score >= minScore;
-      const hasEnoughText = post.selftext.length >= minTextLength;
-      const isNotDeleted = post.author !== '[deleted]';
-      const hasKeywords = post.keywordScore >= minKeywordScore;
-
-      return hasEnoughScore && hasEnoughText && isNotDeleted && hasKeywords;
+    .filter((post) => {
+      return (
+        post.score >= minScore &&
+        post.selftext.length >= minTextLength &&
+        post.author !== '[deleted]' &&
+        post.keywordScore >= minKeywordScore
+      );
     })
-    .sort((a, b) => b.keywordScore - a.keywordScore); // Sort by keyword score
+    .sort((a, b) => b.keywordScore - a.keywordScore);
 }
 
+/**
+ * Filter posts without keyword analysis (legacy)
+ */
 export function filterPosts(
   posts: RedditPost[],
-  minScore: number = 10,
-  minTextLength: number = 100
+  options: {
+    minScore?: number;
+    minTextLength?: number;
+  } = {}
 ): RedditPost[] {
-  return posts.filter(post => {
-    const hasEnoughScore = post.score >= minScore;
-    const hasEnoughText = post.selftext.length >= minTextLength;
-    const isNotDeleted = post.author !== '[deleted]';
+  const {
+    minScore = DEFAULT_CONFIG.minScoreThreshold,
+    minTextLength = DEFAULT_CONFIG.minTextLength,
+  } = options;
 
-    return hasEnoughScore && hasEnoughText && isNotDeleted;
+  return posts.filter((post) => {
+    return (
+      post.score >= minScore &&
+      post.selftext.length >= minTextLength &&
+      post.author !== '[deleted]'
+    );
   });
 }

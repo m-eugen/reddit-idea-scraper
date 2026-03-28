@@ -1,45 +1,118 @@
-import fs from 'fs';
+/**
+ * Output file generation
+ */
+
+import fs from 'fs/promises';
+import { existsSync, readdirSync, statSync } from 'fs';
 import path from 'path';
 import { ScoredIdea, MVPSpecification } from './types.js';
+import { createLogger } from './logger.js';
 
 const OUTPUT_DIR = 'output';
+const logger = createLogger('Output');
 
-function ensureOutputDir(): void {
-  if (!fs.existsSync(OUTPUT_DIR)) {
-    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+/**
+ * Ensure output directory exists
+ */
+async function ensureOutputDir(): Promise<void> {
+  if (!existsSync(OUTPUT_DIR)) {
+    await fs.mkdir(OUTPUT_DIR, { recursive: true });
   }
 }
 
-export function saveIdeas(ideas: ScoredIdea[], filename: string = 'ideas.json'): void {
-  ensureOutputDir();
-  const filepath = path.join(OUTPUT_DIR, filename);
-  fs.writeFileSync(filepath, JSON.stringify(ideas, null, 2));
-  console.log(`\nSaved ${ideas.length} ideas to ${filepath}`);
+/**
+ * Clean output directory (remove all files except progress.json)
+ */
+export async function cleanOutputDir(keepProgress: boolean = true): Promise<void> {
+  try {
+    if (!existsSync(OUTPUT_DIR)) {
+      logger.info('Output directory does not exist, nothing to clean');
+      return;
+    }
+
+    const files = readdirSync(OUTPUT_DIR);
+    const filesToRemove = files.filter((file) => {
+      if (keepProgress && file === 'progress.json') {
+        return false;
+      }
+      const filePath = path.join(OUTPUT_DIR, file);
+      return statSync(filePath).isFile();
+    });
+
+    if (filesToRemove.length === 0) {
+      logger.info('Output directory is already clean');
+      return;
+    }
+
+    for (const file of filesToRemove) {
+      const filePath = path.join(OUTPUT_DIR, file);
+      await fs.unlink(filePath);
+    }
+
+    logger.success(`Cleaned output directory (removed ${filesToRemove.length} files)`);
+  } catch (error) {
+    logger.warning('Failed to clean output directory:', error);
+  }
 }
 
-export function saveMVPSpecs(specs: MVPSpecification[]): void {
-  ensureOutputDir();
+/**
+ * Save ideas to JSON file
+ */
+export async function saveIdeas(
+  ideas: ScoredIdea[],
+  filename: string = 'ideas.json'
+): Promise<void> {
+  await ensureOutputDir();
+  const filepath = path.join(OUTPUT_DIR, filename);
+  await fs.writeFile(filepath, JSON.stringify(ideas, null, 2));
+  logger.success(`Saved ${ideas.length} ideas to ${filepath}`);
+}
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+/**
+ * Get current date string for filenames
+ */
+function getDateString(): string {
+  return new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+}
 
-  specs.forEach((spec, index) => {
-    const filename = `mvp-spec-${timestamp}-${index + 1}.md`;
-    const filepath = path.join(OUTPUT_DIR, filename);
+/**
+ * Format keyword info for MVP spec
+ */
+function formatKeywordInfo(spec: MVPSpecification): string {
+  if (!spec.idea.keywordMatches || spec.idea.keywordMatches.length === 0) {
+    return '';
+  }
 
-    const keywordInfo = spec.idea.keywordMatches && spec.idea.keywordMatches.length > 0
-      ? `\n**🔍 Ключові сигнали** (оцінка: ${spec.idea.keywordScore}/100):\n${spec.idea.keywordMatches.map(m => {
-          const emoji = m.category === 'money' ? '💰' : m.category === 'frustration' ? '😤' : m.category === 'request' ? '💡' : '🔄';
-          return `- ${emoji} ${m.category}: "${m.keyword}" (${m.count}x)`;
-        }).join('\n')}\n`
-      : '';
+  const categoryEmojis = {
+    money: '💰',
+    frustration: '😤',
+    request: '💡',
+    switching: '🔄',
+  };
 
-    const content = `# MVP Специфікація ${index + 1}
+  const keywordsList = spec.idea.keywordMatches
+    .map((m) => {
+      const emoji = categoryEmojis[m.category];
+      return `- ${emoji} ${m.category}: "${m.keyword}" (${m.count}x)`;
+    })
+    .join('\n');
 
-**Оцінка**: ${spec.idea.totalScore.toFixed(1)}/10 (Проблема: ${spec.idea.problemScore}, Потенціал: ${spec.idea.potentialScore})
+  return `\n**🔍 Key Signals** (score: ${spec.idea.keywordScore}/100):\n${keywordsList}\n`;
+}
+
+/**
+ * Generate MVP spec content
+ */
+function generateMVPSpecContent(spec: MVPSpecification, index: number): string {
+  const keywordInfo = formatKeywordInfo(spec);
+
+  return `# MVP Specification ${index + 1}
+
+**Score**: ${spec.idea.totalScore.toFixed(1)}/10 (Problem: ${spec.idea.problemScore}, Potential: ${spec.idea.potentialScore})
 ${keywordInfo}
-**Джерело**: [r/${spec.idea.post.subreddit}](${spec.idea.post.permalink})
+**Source**: [r/${spec.idea.post.subreddit}](${spec.idea.post.permalink})
 
-**Оригінальний пост**:
+**Original Post**:
 > ${spec.idea.post.title}
 
 ---
@@ -48,53 +121,82 @@ ${spec.specification}
 
 ---
 
-## Оригінальний текст з Reddit
+## Original Text from Reddit
 
 ${spec.idea.post.selftext}
 
 ---
 
-*Згенеровано: ${new Date().toLocaleString('uk-UA')}*
+*Generated: ${new Date().toLocaleString('en-US')}*
 `;
+}
 
-    fs.writeFileSync(filepath, content);
-    console.log(`Saved: ${filepath}`);
-  });
+/**
+ * Generate summary content
+ */
+function generateSummaryContent(specs: MVPSpecification[], timestamp: string): string {
+  const ideasList = specs
+    .map((spec, index) => {
+      const hasMoney = spec.idea.keywordMatches?.some((m) => m.category === 'money');
+      const moneyTag = hasMoney ? ' 💰 WILLINGNESS TO PAY' : '';
+      const kwScore = spec.idea.keywordScore
+        ? ` | Keywords: ${spec.idea.keywordScore}/100`
+        : '';
 
-  const summaryFilename = `mvp-specs-summary-${timestamp}.md`;
-  const summaryFilepath = path.join(OUTPUT_DIR, summaryFilename);
-
-  const summaryContent = `# Підсумок MVP Специфікацій
-
-**Дата**: ${new Date().toLocaleString('uk-UA')}
-**Знайдено ідей**: ${specs.length}
-
-## Список ідей (за рейтингом)
-
-${specs.map((spec, index) => {
-  const hasMoney = spec.idea.keywordMatches?.some(m => m.category === 'money');
-  const moneyTag = hasMoney ? ' 💰 ГОТОВНІСТЬ ПЛАТИТИ' : '';
-  const kwScore = spec.idea.keywordScore ? ` | Ключові слова: ${spec.idea.keywordScore}/100` : '';
-
-  return `
+      return `
 ### ${index + 1}. ${spec.idea.problemDescription}${moneyTag}
 
-- **Оцінка**: ${spec.idea.totalScore.toFixed(1)}/10
-- **Проблема**: ${spec.idea.problemScore}/10
-- **Потенціал**: ${spec.idea.potentialScore}/10${kwScore}
+- **Score**: ${spec.idea.totalScore.toFixed(1)}/10
+- **Problem**: ${spec.idea.problemScore}/10
+- **Potential**: ${spec.idea.potentialScore}/10${kwScore}
 - **Subreddit**: r/${spec.idea.post.subreddit}
-- **Пост**: [${spec.idea.post.title}](${spec.idea.post.permalink})
-- **Файл**: \`mvp-spec-${timestamp}-${index + 1}.md\`
+- **Post**: [${spec.idea.post.title}](${spec.idea.post.permalink})
+- **File**: \`mvp-spec-${timestamp}-${index + 1}.md\`
 
-**Короткий опис проблеми**: ${spec.idea.problemDescription}
+**Problem Description**: ${spec.idea.problemDescription}
 
 ---
 `;
-}).join('\n')}
+    })
+    .join('\n');
 
-*Згенеровано автоматично Reddit Idea Scraper*
+  return `# MVP Specifications Summary
+
+**Date**: ${new Date().toLocaleString('en-US')}
+**Ideas Found**: ${specs.length}
+
+## Ideas List (by rating)
+
+${ideasList}
+
+*Generated automatically by Reddit Idea Scraper*
 `;
+}
 
-  fs.writeFileSync(summaryFilepath, summaryContent);
-  console.log(`\nSummary saved to ${summaryFilepath}`);
+/**
+ * Save MVP specifications to files
+ */
+export async function saveMVPSpecs(specs: MVPSpecification[]): Promise<void> {
+  await ensureOutputDir();
+
+  const timestamp = getDateString();
+
+  // Save individual MVP specs
+  for (let i = 0; i < specs.length; i++) {
+    const spec = specs[i];
+    const filename = `mvp-spec-${timestamp}-${i + 1}.md`;
+    const filepath = path.join(OUTPUT_DIR, filename);
+    const content = generateMVPSpecContent(spec, i);
+
+    await fs.writeFile(filepath, content);
+    logger.info(`Saved: ${filepath}`);
+  }
+
+  // Save summary
+  const summaryFilename = `mvp-specs-summary-${timestamp}.md`;
+  const summaryFilepath = path.join(OUTPUT_DIR, summaryFilename);
+  const summaryContent = generateSummaryContent(specs, timestamp);
+
+  await fs.writeFile(summaryFilepath, summaryContent);
+  logger.success(`Summary saved to ${summaryFilepath}`);
 }
