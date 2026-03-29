@@ -33,7 +33,19 @@ export async function scrapeSubreddit(
 
     const url = `${REDDIT_API_BASE}/r/${subreddit}/hot.json?limit=${limit}`;
     const response = await fetch(url, {
-      headers: { 'User-Agent': USER_AGENT },
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Cache-Control': 'max-age=0',
+      },
     });
 
     if (!response.ok) {

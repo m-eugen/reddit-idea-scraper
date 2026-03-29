@@ -4,7 +4,7 @@
 
 // API Configuration
 export const REDDIT_API_BASE = 'https://www.reddit.com';
-export const USER_AGENT = 'Mozilla/5.0 (compatible; RedditIdeaScraper/2.0)';
+export const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 // Delays and Timeouts
 export const REDDIT_REQUEST_DELAY_MS = 2000;
