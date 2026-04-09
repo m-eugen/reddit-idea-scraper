@@ -2,12 +2,7 @@
  * Reddit scraping and keyword analysis
  */
 
-import {
-  RedditPost,
-  KeywordMatch,
-  PostWithKeywords,
-  KeywordCategories,
-} from './types.js';
+import { RedditPost, KeywordMatch, PostWithKeywords, KeywordCategories } from './types.js';
 import {
   REDDIT_API_BASE,
   USER_AGENT,
@@ -35,11 +30,11 @@ export async function scrapeSubreddit(
     const response = await fetch(url, {
       headers: {
         'User-Agent': USER_AGENT,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
         'Accept-Encoding': 'gzip, deflate, br',
-        'DNT': '1',
-        'Connection': 'keep-alive',
+        DNT: '1',
+        Connection: 'keep-alive',
         'Upgrade-Insecure-Requests': '1',
         'Sec-Fetch-Dest': 'document',
         'Sec-Fetch-Mode': 'navigate',
@@ -115,10 +110,7 @@ export async function scrapeMultipleSubreddits(
 /**
  * Find keyword matches in text
  */
-export function findKeywordMatches(
-  text: string,
-  keywords: KeywordCategories
-): KeywordMatch[] {
+export function findKeywordMatches(text: string, keywords: KeywordCategories): KeywordMatch[] {
   const textLower = text.toLowerCase();
   const matches: KeywordMatch[] = [];
 
@@ -200,9 +192,7 @@ export function filterAndScorePosts(
     minKeywordScore = DEFAULT_CONFIG.minKeywordScore,
   } = options;
 
-  const postsWithKeywords = posts.map((post) =>
-    analyzePostKeywords(post, keywords)
-  );
+  const postsWithKeywords = posts.map((post) => analyzePostKeywords(post, keywords));
 
   return postsWithKeywords
     .filter((post) => {
@@ -233,9 +223,7 @@ export function filterPosts(
 
   return posts.filter((post) => {
     return (
-      post.score >= minScore &&
-      post.selftext.length >= minTextLength &&
-      post.author !== '[deleted]'
+      post.score >= minScore && post.selftext.length >= minTextLength && post.author !== '[deleted]'
     );
   });
 }
